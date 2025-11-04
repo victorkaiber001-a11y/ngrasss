@@ -1,0 +1,1 @@
+& "C:\Program Files (x86)\...\remoting_start_host.exe" --code="4/abc123..." --redirect-url="..." --name=WIN-PC
