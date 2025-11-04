@@ -1,0 +1,44 @@
+name: VDS Oluştur + CRD Kur
+
+on: workflow_dispatch
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hetzner VDS Oluştur
+        id: create_server
+        run: |
+          curl -X POST "https://api.hetzner.cloud/v1/servers" \
+            -H "Authorization: Bearer ${{ secrets.HCLOUD_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "vds-$(date +%s)",
+              "server_type": "cx22",
+              "image": "windows-2022",
+              "location": "nbg1",
+              "ssh_keys": ["${{ secrets.SSH_KEY }}"],
+              "user_data": "#cloud-config\n\nruncmd:\n- powershell -Command \"Set-ExecutionPolicy Bypass -Scope Process -Force; iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/USER/REPO/main/setup-crd.ps1'))\""
+            }' > response.json
+
+          IP=$(jq -r .server.public_net.ipv4.ip response.json)
+          echo "IP=$IP" >> $GITHUB_OUTPUT
+          echo "VDS OLUŞTU: $IP"
+
+      - name: 2 Dakika Bekle (Windows başlasın)
+        run: sleep 120
+
+      - name: SSH ile CRD Kur
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ steps.create_server.outputs.IP }}
+          username: Administrator
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            powershell -Command "Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/USER/REPO/main/setup-crd.ps1' -OutFile 'C:\setup.ps1'; C:\setup.ps1"
+
+      - name: IP ve PIN Göster
+        run: |
+          echo "VDS IP: ${{ steps.create_server.outputs.IP }}"
+          echo "CRD PIN: ${{ secrets.CRD_PIN }}"
+          echo "CRD ile bağlan: https://remotedesktop.google.com/access"
